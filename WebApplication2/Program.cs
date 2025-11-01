@@ -12,29 +12,29 @@ using WebApplication2.Services;
 using WebApplication2.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
+
 var key = builder.Configuration["Jwt:Key"];
 var issuer = builder.Configuration["Jwt:Issuer"];
 var audience = builder.Configuration["Jwt:Audience"];
 
 // Add services to the container.
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
-{
-    options.TokenValidationParameters = new TokenValidationParameters
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
     {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = issuer,
-        ValidAudience = audience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key))
-    };
+        options.SaveToken = true; 
+        options.RequireHttpsMetadata = true;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = issuer,
+            ValidAudience = audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key!)),
+            ClockSkew = TimeSpan.Zero
+        };
 });
 
 builder.Services.AddAuthorization();
@@ -68,6 +68,16 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    // Evita redirect a login en APIs
+    options.Events.OnRedirectToLogin = context =>
+    {
+        context.Response.StatusCode = 401;
+        return Task.CompletedTask;
+    };
+});
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfesorService, ProfesorService>();
 builder.Services.AddScoped<IDirectorService, DirectorService>();
@@ -99,10 +109,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseCors("frontend");
-app.UseAuthentication();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();

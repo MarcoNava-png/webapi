@@ -17,32 +17,47 @@ namespace WebApplication2.Services
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly SignInManager<ApplicationUser> _signInManager;
         private readonly IConfiguration _configuration;
+        private readonly RoleManager<IdentityRole> _roleManager;
 
-        public AuthService(UserManager<ApplicationUser> userManager, SignInManager<ApplicationUser> signInManager,
-            IConfiguration configuration)
+        public AuthService(
+            UserManager<ApplicationUser> userManager,
+            SignInManager<ApplicationUser> signInManager,
+            IConfiguration configuration,
+            RoleManager<IdentityRole> roleManager)
         {
             _userManager = userManager;
             _signInManager = signInManager;
             _configuration = configuration;
+            _roleManager = roleManager;
         }
 
         public async Task<ApplicationUser> Signup(ApplicationUser user, string password, List<string> roles)
         {
+            // Crear usuario
             var result = await _userManager.CreateAsync(user, password);
 
             if (!result.Succeeded)
             {
                 var errors = string.Join(" ", result.Errors.Select(error => error.Description));
-
                 throw new ValidationException(errors);
             }
 
+            // Asignar roles y claims
             foreach (var role in roles)
             {
+                // Validar si no existe el rol
+                if (!await _roleManager.RoleExistsAsync(role))
+                {
+                    throw new ValidationException($"El rol {role}: no existe.");
+                }
+
+                // Asignar claim de rol
                 await _userManager.AddClaimAsync(user, new Claim(ClaimTypes.Role, role));
+
+                // Asignar rol al usuario
                 await _userManager.AddToRoleAsync(user, role);
             }
-            
+
             return user;
 
         }
@@ -153,8 +168,8 @@ namespace WebApplication2.Services
         {
             var claims = new List<Claim>
             {
-                new Claim("userId", user.Id),
-                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
+                new Claim(ClaimTypes.Name, user.Email!),
                 new Claim(ClaimTypes.Role, role)
             };
 
@@ -179,12 +194,15 @@ namespace WebApplication2.Services
 
         private string BuildToken(List<Claim> claims, DateTime expiration)
         {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["JWT:Key"]));
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            JwtSecurityToken token = new JwtSecurityToken(
-                issuer: null,
-                audience: null,
+            var issuer = _configuration["Jwt:Issuer"];
+            var audience = _configuration["Jwt:Audience"];
+
+            var token = new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
                 claims: claims,
                 expires: expiration,
                 signingCredentials: creds
@@ -193,16 +211,5 @@ namespace WebApplication2.Services
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
-        //private async Task SendTokenByEmail(string to, string callbackUrl)
-        //{
-        //    var email = new Email
-        //    {
-        //        To = to,
-        //        Body = callbackUrl,
-        //        Subject = "Request Password Reset"
-        //    };
-
-        //    await _emailService.SendAsync(email);
-        //}
     }
 }

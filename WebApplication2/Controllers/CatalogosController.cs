@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApplication2.Core.Enums;
 using WebApplication2.Core.Models;
@@ -6,8 +8,9 @@ using WebApplication2.Data.DbContexts;
 
 namespace WebApplication2.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
+    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)] // Especificar JWT explícitamente
     public class CatalogosController : ControllerBase
     {
         private readonly ApplicationDbContext _dbContext;
